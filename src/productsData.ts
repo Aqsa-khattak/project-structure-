@@ -960,7 +960,7 @@ export const productsData: Product[] = [
     id: 59,
     title: "Coquette Deep Red Bow & Pearl Drop Phone Charm",
     price: 420,
-    image: "/assets/charm/mobilecharm3.png",
+    image: "/assets/charm/mobilecharm3.jpg",
     category: "Jewellery",
     subCategory: "mobile charm",
     inStock: true,
