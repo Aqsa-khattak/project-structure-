@@ -11,10 +11,15 @@ import { db, isFirebaseConfigured } from "./firebase";
 import { productsData } from "./productsData";
 import type { Product } from "./types";
 import { bus } from "./state";
+import { assetUrl } from "./assetPath";
 
 const COLLECTION = "products";
 
-let catalog: Product[] = [...productsData];
+function withResolvedImages(list: Product[]): Product[] {
+  return list.map((p) => (p.image ? { ...p, image: assetUrl(p.image) } : p));
+}
+
+let catalog: Product[] = withResolvedImages(productsData);
 let usingLocalCatalog = true;
 let loaded = false;
 
@@ -34,20 +39,19 @@ export function isCatalogLoaded(): boolean {
   return loaded;
 }
 
-/** Read the catalog from Firestore once at start-up. */
 export async function loadProducts(): Promise<void> {
   loaded = true;
   if (!isFirebaseConfigured) return;
 
   try {
     const snap = await getDocs(collection(db, COLLECTION));
-    if (snap.empty) return; // nothing imported yet — keep the bundled list
+    if (snap.empty) return; 
 
     const list: Product[] = [];
     snap.forEach((d) => list.push(d.data() as Product));
     list.sort((a, b) => a.id - b.id);
 
-    catalog = list;
+    catalog = withResolvedImages(list);
     usingLocalCatalog = false;
     bus.emit("products:change");
   } catch (err) {
@@ -83,7 +87,6 @@ export async function deleteProduct(id: number): Promise<void> {
   await reload();
 }
 
-/** Next free id, so new products never clash with the bundled ones. */
 export function nextProductId(): number {
   return catalog.reduce((max, p) => Math.max(max, p.id), 0) + 1;
 }
@@ -93,7 +96,7 @@ async function reload(): Promise<void> {
   const list: Product[] = [];
   snap.forEach((d) => list.push(d.data() as Product));
   list.sort((a, b) => a.id - b.id);
-  catalog = list.length ? list : [...productsData];
+  catalog = withResolvedImages(list.length ? list : productsData);
   usingLocalCatalog = list.length === 0;
   bus.emit("products:change");
 }

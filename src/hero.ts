@@ -1,4 +1,5 @@
 import { goToShop } from "./state";
+import { assetUrl } from "./assetPath";
 
 interface Slide {
   eyebrow: string;
@@ -68,7 +69,7 @@ export function renderHero(container: HTMLElement): void {
       <div class="hero-track" id="heroTrack" style="width:${count * 100}%;">
         ${SLIDES.map(
           (s) => `
-          <div class="hero-slide" style="width:${100 / count}%; background-image:url('${s.image}')">
+          <div class="hero-slide" style="width:${100 / count}%; background-image:url('${assetUrl(s.image)}')">
             <div class="hero-content">
               <span class="section-eyebrow">${s.eyebrow}</span>
               <h1>${s.title}</h1>
