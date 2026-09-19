@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
 
 export default defineConfig(({ command }) => ({
-  base: command === "build" ? "/papernest/" : "/",
+  base: command === "build" ? "/project-structure-/" : "/",
 }));
