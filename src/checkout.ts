@@ -5,7 +5,6 @@ import { requireAuth, getDisplayName } from "./auth";
 import { showToast, closeCart } from "./cart";
 import { isFirebaseConfigured } from "./firebase";
 
-/** Ask for delivery details, then write the order to Firestore. */
 export function openCheckout(): void {
   if (!cart.length) return;
 

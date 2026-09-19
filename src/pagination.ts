@@ -2,7 +2,7 @@ export interface PaginationOptions {
   currentPage: number;
   totalPages: number;
   onChange: (page: number) => void;
-  /** How many pages to show either side of the current one. */
+  
   siblings?: number;
 }
 

@@ -12,6 +12,7 @@ import {
 import { db } from "./firebase";
 import { getCurrentUser, getProfile } from "./auth";
 import { cart, getCartTotal } from "./state";
+import { rawAssetPath } from "./assetPath";
 import type { Order, OrderLine, OrderStatus } from "./types";
 
 const COLLECTION = "orders";
@@ -30,7 +31,7 @@ export async function placeOrder(details: CheckoutDetails): Promise<string> {
     id: item.product.id,
     title: item.product.title,
     price: item.product.price,
-    image: item.product.image,
+    image: rawAssetPath(item.product.image),
     quantity: item.quantity,
   }));
 
@@ -50,7 +51,6 @@ export async function placeOrder(details: CheckoutDetails): Promise<string> {
   return ref.id;
 }
 
-/** Orders belonging to the signed-in shopper, newest first. */
 export async function getMyOrders(): Promise<Order[]> {
   const user = getCurrentUser();
   if (!user) return [];
@@ -63,7 +63,6 @@ export async function getMyOrders(): Promise<Order[]> {
   return list.sort((a, b) => b.createdAt - a.createdAt);
 }
 
-/** Every order in the shop — admin only (enforced by Firestore rules). */
 export async function getAllOrders(): Promise<Order[]> {
   const snap = await getDocs(
     query(collection(db, COLLECTION), orderBy("createdAt", "desc"))

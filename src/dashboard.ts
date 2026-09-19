@@ -3,13 +3,14 @@ import { getFavouriteProducts, clearFavourites } from "./favourites";
 import { createProductCard, bindProductCardEvents } from "./products";
 import { getMyOrders } from "./orders";
 import { formatPrice } from "./utils";
+import { assetUrl } from "./assetPath";
 import { getCartCount, goToShop, navigate } from "./state";
 import { showToast } from "./cart";
 import type { Order } from "./types";
 import { isFirebaseConfigured } from "./firebase";
 
 /* ==========================================================================
-   WISHLIST PAGE 
+   WISHLIST PAGE  (#wishlist)
    ========================================================================== */
 
 export function renderWishlistPage(container: HTMLElement): void {
@@ -190,7 +191,7 @@ function orderCard(order: Order): string {
         ${order.items
           .map(
             (line) => `<li>
-              <img src="${line.image}" alt="" loading="lazy" />
+              <img src="${assetUrl(line.image)}" alt="" loading="lazy" />
               <span>${escapeHtml(line.title)}</span>
               <span class="order-qty">× ${line.quantity}</span>
             </li>`
