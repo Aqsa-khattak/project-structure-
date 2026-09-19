@@ -1,5 +1,6 @@
 import "../style.css";
 
+import type { ViewName } from "./types";
 import { renderNavbar } from "./navbar";
 import { renderHero, stopHeroAutoplay } from "./hero";
 import {
@@ -10,7 +11,13 @@ import {
 } from "./products";
 import { setupSearch } from "./search";
 import { setupCart } from "./cart";
-import { bus, currentView, goToShop, setView } from "./state";
+import { bus, currentView, goToShop, setCartOwner, setView } from "./state";
+import { getCurrentUser, initAuth } from "./auth";
+import { setFavouritesOwner } from "./favourites";
+import { loadProducts } from "./productsService";
+import { renderAccountPage, renderWishlistPage } from "./dashboard";
+import { renderAdminPage } from "./admin";
+import "./app.css";
 
 function renderFooter(): void {
   const footer = document.getElementById("site-footer")!;
@@ -67,24 +74,42 @@ function renderApp(): void {
   teardownHomeSections();
   app.innerHTML = "";
 
-  if (currentView === "shop") {
-    renderShopPage(app);
-  } else {
-    const heroContainer = document.createElement("div");
-    app.appendChild(heroContainer);
-    renderHero(heroContainer);
-    renderHomeSections(app);
+  switch (currentView) {
+    case "shop":
+      renderShopPage(app);
+      break;
+    case "wishlist":
+      renderWishlistPage(app);
+      break;
+    case "account":
+      renderAccountPage(app);
+      break;
+    case "admin":
+      renderAdminPage(app);
+      break;
+    default: {
+      const heroContainer = document.createElement("div");
+      app.appendChild(heroContainer);
+      renderHero(heroContainer);
+      renderHomeSections(app);
+    }
   }
 
   window.scrollTo(0, 0);
 }
 
+const ROUTES: ViewName[] = ["home", "shop", "wishlist", "account", "admin"];
+
 function syncViewFromHash(): void {
-  const hash = window.location.hash.replace("#", "");
-  setView(hash === "shop" ? "shop" : "home");
+  const hash = window.location.hash.replace("#", "") as ViewName;
+  setView(ROUTES.includes(hash) ? hash : "home");
 }
 
-function init(): void {
+async function init(): Promise<void> {
+  await Promise.all([initAuth(), loadProducts()]);
+  syncOwnedDataToCurrentUser();
+  bus.on("auth:change", syncOwnedDataToCurrentUser);
+
   renderNavbar();
   renderFooter();
   setupSearch();
@@ -97,9 +122,22 @@ function init(): void {
     if (currentView === "shop") refreshShopPageIfMounted();
   });
 
+  bus.on("auth:change", () => {
+    if (currentView === "account" || currentView === "admin") renderApp();
+  });
+  bus.on("favourites:change", () => {
+    if (currentView === "wishlist") renderApp();
+  });
+
   window.addEventListener("hashchange", syncViewFromHash);
 
   renderApp();
 }
 
-document.addEventListener("DOMContentLoaded", init);
+function syncOwnedDataToCurrentUser(): void {
+  const uid = getCurrentUser()?.uid ?? null;
+  setCartOwner(uid);
+  setFavouritesOwner(uid);
+}
+
+document.addEventListener("DOMContentLoaded", () => void init());

@@ -109,8 +109,10 @@ function bindEvents(): void {
     goToShop();
   });
 
-  document.getElementById("checkoutBtn")!.addEventListener("click", () => {
-    showToast("Checkout coming soon — thanks for shopping with Papernest!");
+  document.getElementById("checkoutBtn")!.addEventListener("click", async () => {
+    // Imported on demand so cart.ts stays free of a circular dependency.
+    const { openCheckout } = await import("./checkout");
+    openCheckout();
   });
 
   document.querySelectorAll<HTMLElement>(".cart-item").forEach((row) => {

@@ -1,5 +1,5 @@
 import type { Product, CategoryDef } from "./types";
-import { productsData } from "./productsData";
+import { getAllProducts } from "./productsService";
 
 export const CATEGORIES: CategoryDef[] = [
   { slug: "bags", label: "Bags", match: ["bag", "bags"] },
@@ -44,7 +44,7 @@ export function getCategoryLabel(slug: string): string {
 }
 
 export function getCategoryThumbnail(slug: string): string {
-  const match = productsData.find((p) =>
+  const match = getAllProducts().find((p) =>
     getProductCategorySlugs(p).includes(slug)
   );
   return match?.image ?? "";
@@ -52,7 +52,7 @@ export function getCategoryThumbnail(slug: string): string {
 
 export function getSubCategoriesForCategory(slug: string): string[] {
   const seen = new Set<string>();
-  productsData.forEach((p) => {
+  getAllProducts().forEach((p) => {
     if (!getProductCategorySlugs(p).includes(slug)) return;
     getProductSubCategories(p).forEach((sc) => seen.add(sc));
   });

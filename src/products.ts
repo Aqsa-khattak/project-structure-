@@ -1,5 +1,5 @@
 import type { Product } from "./types";
-import { productsData } from "./productsData";
+import { getAllProducts } from "./productsService";
 import {
   CATEGORIES,
   formatPrice,
@@ -7,15 +7,17 @@ import {
   getCategoryThumbnail,
   getProductCategorySlugs,
   getProductSubCategories,
+  getSubCategoriesForCategory,
 } from "./utils";
-import { addToCart, goToShop, setFilters, shopFilters } from "./state";
+import { addToCart, goToShop, resetFilters, setFilters, shopFilters } from "./state";
 import { openProductQuickView } from "./modal";
 import { showToast } from "./cart";
+import { isFavourite, toggleFavourite } from "./favourites";
+import { renderPagination } from "./pagination";
 
 const SHOP_PAGE_SIZE = 12;
 const HOME_PAGE_SIZE = 16;
 
-let shopVisibleCount = SHOP_PAGE_SIZE;
 let homeVisibleCount = HOME_PAGE_SIZE;
 let homeObserver: IntersectionObserver | null = null;
 
@@ -66,6 +68,10 @@ export function createProductCard(product: Product): string {
     <article class="product-card reveal" data-id="${product.id}">
       <div class="product-media" data-action="quickview">
         ${!product.inStock ? '<span class="badge badge-stock">Sold Out</span>' : ""}
+        <button class="fav-btn${isFavourite(product.id) ? " saved" : ""}"
+                data-action="fav"
+                aria-pressed="${isFavourite(product.id)}"
+                aria-label="Save ${escapeHtml(product.title)} to wishlist">♥</button>
         <img src="${product.image}" alt="${escapeHtml(product.title)}" loading="lazy" />
       </div>
       <div class="product-info">
@@ -82,15 +88,25 @@ export function createProductCard(product: Product): string {
   `;
 }
 
-/** Attach click handlers for quick-view & add-to-cart on the given `.product-card` elements. */
-function bindProductCardEvents(cards: Element[] | NodeListOf<Element>): void {
+/** Attach click handlers for quick-view, wishlist & add-to-cart on `.product-card` elements. */
+export function bindProductCardEvents(cards: Element[] | NodeListOf<Element>): void {
   Array.from(cards).forEach((card) => {
     const id = Number((card as HTMLElement).dataset.id);
-    const product = productsData.find((p) => p.id === id);
+    const product = getAllProducts().find((p) => p.id === id);
     if (!product) return;
 
     card.querySelectorAll<HTMLElement>('[data-action="quickview"]').forEach((el) => {
       el.addEventListener("click", () => openProductQuickView(product));
+    });
+
+    card.querySelectorAll<HTMLButtonElement>('[data-action="fav"]').forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const saved = toggleFavourite(product.id);
+        el.classList.toggle("saved", saved);
+        el.setAttribute("aria-pressed", String(saved));
+        showToast(saved ? `${product.title} saved to wishlist` : `${product.title} removed from wishlist`);
+      });
     });
 
     card.querySelectorAll<HTMLButtonElement>('[data-action="add"]').forEach((el) => {
@@ -117,7 +133,7 @@ export function renderHomeSections(container: HTMLElement): void {
 
   const categoryCardsHtml = CATEGORIES.map((cat) => {
     const thumb = getCategoryThumbnail(cat.slug);
-    const count = productsData.filter((p) =>
+    const count = getAllProducts().filter((p) =>
       getProductCategorySlugs(p).includes(cat.slug)
     ).length;
     return `
@@ -195,12 +211,12 @@ function renderHomeProductBatch(): void {
   const endMsg = document.getElementById("homeEndMessage");
   if (!grid) return;
 
-  const slice = productsData.slice(0, homeVisibleCount);
+  const slice = getAllProducts().slice(0, homeVisibleCount);
   grid.innerHTML = slice.map(createProductCard).join("");
   bindProductCardEvents(grid.querySelectorAll(".product-card"));
   observeReveal(grid.querySelectorAll(".product-card"));
 
-  const allLoaded = homeVisibleCount >= productsData.length;
+  const allLoaded = homeVisibleCount >= getAllProducts().length;
   if (sentinel) sentinel.style.display = allLoaded ? "none" : "block";
   if (endMsg) endMsg.style.display = allLoaded ? "block" : "none";
 }
@@ -211,7 +227,7 @@ function appendHomeProductBatch(): void {
   const endMsg = document.getElementById("homeEndMessage");
   if (!grid) return;
 
-  const nextSlice = productsData.slice(homeVisibleCount, homeVisibleCount + HOME_PAGE_SIZE);
+  const nextSlice = getAllProducts().slice(homeVisibleCount, homeVisibleCount + HOME_PAGE_SIZE);
   if (!nextSlice.length) return;
 
   const temp = document.createElement("div");
@@ -224,7 +240,7 @@ function appendHomeProductBatch(): void {
 
   homeVisibleCount += HOME_PAGE_SIZE;
 
-  const allLoaded = homeVisibleCount >= productsData.length;
+  const allLoaded = homeVisibleCount >= getAllProducts().length;
   if (allLoaded) {
     if (sentinel) sentinel.style.display = "none";
     if (endMsg) endMsg.style.display = "block";
@@ -241,7 +257,7 @@ function setupHomeInfiniteScroll(): void {
 
   if (!("IntersectionObserver" in window)) {
     // Fallback: load everything at once if the browser can't observe scroll.
-    while (homeVisibleCount < productsData.length) {
+    while (homeVisibleCount < getAllProducts().length) {
       homeVisibleCount += HOME_PAGE_SIZE;
     }
     renderHomeProductBatch();
@@ -261,7 +277,6 @@ function setupHomeInfiniteScroll(): void {
   homeObserver.observe(sentinel);
 }
 
-/** Stop the home page's infinite-scroll observer — call when navigating away. */
 export function teardownHomeSections(): void {
   if (homeObserver) {
     homeObserver.disconnect();
@@ -274,12 +289,15 @@ export function teardownHomeSections(): void {
    ========================================================================== */
 
 function getFilteredProducts(): Product[] {
-  const { category, subCategory, search, sort } = shopFilters;
+  const { category, subCategory, search, sort, minPrice, maxPrice, inStockOnly } = shopFilters;
   const term = search.trim().toLowerCase();
 
-  let list = productsData.filter((p) => {
+  let list = getAllProducts().filter((p) => {
     if (category && !getProductCategorySlugs(p).includes(category)) return false;
     if (subCategory && !getProductSubCategories(p).includes(subCategory)) return false;
+    if (inStockOnly && !p.inStock) return false;
+    if (minPrice !== null && p.price < minPrice) return false;
+    if (maxPrice !== null && p.price > maxPrice) return false;
     if (term) {
       const inTitle = p.title.toLowerCase().includes(term);
       const inSub = getProductSubCategories(p).some((s) =>
@@ -311,7 +329,6 @@ function getFilteredProducts(): Product[] {
 }
 
 export function renderShopPage(container: HTMLElement): void {
-  shopVisibleCount = SHOP_PAGE_SIZE;
   container.innerHTML = `
     <section class="shop-hero">
       <div class="container">
@@ -320,31 +337,117 @@ export function renderShopPage(container: HTMLElement): void {
       </div>
     </section>
     <div class="container">
-      <div class="shop-main">
-        <div class="shop-toolbar">
-          <div class="results-count" id="resultsCount"></div>
-          <div class="toolbar-right">
-            <select class="sort-select" id="sortSelect">
-              <option value="featured">Sort: Featured</option>
-              <option value="price-asc">Price: Low to High</option>
-              <option value="price-desc">Price: High to Low</option>
-              <option value="name-asc">Name: A to Z</option>
-              <option value="name-desc">Name: Z to A</option>
-            </select>
+      <div class="shop-layout">
+        <button class="btn btn-outline filters-toggle" id="filtersToggle" type="button">Filters</button>
+
+        <aside class="shop-filters" id="shopFilters">
+          <div class="filter-head">
+            <h3>Filters</h3>
+            <button class="filter-reset" id="clearFiltersBtn" type="button">Clear all</button>
           </div>
-        </div>
-        <div class="active-chips" id="activeChips"></div>
-        <div class="product-grid" id="shopGrid"></div>
-        <div style="text-align:center;margin-top:34px;">
-          <button class="btn btn-outline" id="loadMoreBtn">Load More</button>
+
+          <div class="filter-group">
+            <h4>Category</h4>
+            <div id="categoryFilters"></div>
+          </div>
+
+          <div class="filter-group" id="subCategoryGroup">
+            <h4>Type</h4>
+            <div id="subCategoryFilters"></div>
+          </div>
+
+          <div class="filter-group">
+            <h4>Price</h4>
+            <div class="price-inputs">
+              <input type="number" id="minPriceInput" min="0" placeholder="Min" />
+              <span>to</span>
+              <input type="number" id="maxPriceInput" min="0" placeholder="Max" />
+            </div>
+            <button class="btn btn-outline btn-block filter-apply" id="applyPriceBtn" type="button">Apply price</button>
+          </div>
+
+          <div class="filter-group">
+            <label class="filter-check">
+              <input type="checkbox" id="inStockOnly" />
+              <span>In stock only</span>
+            </label>
+          </div>
+        </aside>
+
+        <div class="shop-main">
+          <div class="shop-toolbar">
+            <div class="results-count" id="resultsCount"></div>
+            <div class="toolbar-right">
+              <select class="sort-select" id="sortSelect">
+                <option value="featured">Sort: Featured</option>
+                <option value="price-asc">Price: Low to High</option>
+                <option value="price-desc">Price: High to Low</option>
+                <option value="name-asc">Name: A to Z</option>
+                <option value="name-desc">Name: Z to A</option>
+              </select>
+            </div>
+          </div>
+          <div class="active-chips" id="activeChips"></div>
+          <div class="product-grid" id="shopGrid"></div>
+          <div class="pagination-wrap" id="shopPagination"></div>
         </div>
       </div>
     </div>
   `;
 
   updateShopHeroTitle();
+  renderFilterSidebar();
   renderToolbarAndGrid();
   bindShopChrome();
+}
+
+/* --------------------------- FILTER SIDEBAR --------------------------- */
+
+function renderFilterSidebar(): void {
+  const catBox = document.getElementById("categoryFilters");
+  const subBox = document.getElementById("subCategoryFilters");
+  const subGroup = document.getElementById("subCategoryGroup");
+  if (!catBox || !subBox || !subGroup) return;
+
+  const all = getAllProducts();
+
+  catBox.innerHTML = CATEGORIES.map((cat) => {
+    const count = all.filter((p) => getProductCategorySlugs(p).includes(cat.slug)).length;
+    const active = shopFilters.category === cat.slug;
+    return `<button class="filter-pill${active ? " active" : ""}" data-filter-cat="${cat.slug}">
+        ${cat.label} <span>${count}</span>
+      </button>`;
+  }).join("");
+
+  catBox.querySelectorAll<HTMLButtonElement>("[data-filter-cat]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const slug = btn.dataset.filterCat ?? null;
+      const next = shopFilters.category === slug ? null : slug;
+      setFilters({ category: next, subCategory: null });
+    });
+  });
+
+  if (!shopFilters.category) {
+    subGroup.style.display = "none";
+    subBox.innerHTML = "";
+    return;
+  }
+
+  const subs = getSubCategoriesForCategory(shopFilters.category);
+  subGroup.style.display = subs.length ? "block" : "none";
+  subBox.innerHTML = subs
+    .map((sub) => {
+      const active = shopFilters.subCategory === sub;
+      return `<button class="filter-pill${active ? " active" : ""}" data-filter-sub="${escapeHtml(sub)}">${escapeHtml(sub)}</button>`;
+    })
+    .join("");
+
+  subBox.querySelectorAll<HTMLButtonElement>("[data-filter-sub]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const sub = btn.dataset.filterSub ?? null;
+      setFilters({ subCategory: shopFilters.subCategory === sub ? null : sub });
+    });
+  });
 }
 
 function updateShopHeroTitle(): void {
@@ -368,33 +471,34 @@ function renderToolbarAndGrid(): void {
   const grid = document.getElementById("shopGrid");
   const resultsCount = document.getElementById("resultsCount");
   const chipsBox = document.getElementById("activeChips");
-  const loadMoreBtn = document.getElementById("loadMoreBtn") as HTMLButtonElement | null;
   const sortSelect = document.getElementById("sortSelect") as HTMLSelectElement | null;
   if (!grid || !resultsCount || !chipsBox) return;
 
   const results = getFilteredProducts();
-  const visible = results.slice(0, shopVisibleCount);
+  const totalPages = Math.max(1, Math.ceil(results.length / SHOP_PAGE_SIZE));
+  const page = Math.min(Math.max(1, shopFilters.page), totalPages);
+  if (page !== shopFilters.page) shopFilters.page = page;
 
-  resultsCount.innerHTML = `<strong>${results.length}</strong> item${results.length === 1 ? "" : "s"} found`;
+  const start = (page - 1) * SHOP_PAGE_SIZE;
+  const visible = results.slice(start, start + SHOP_PAGE_SIZE);
+
+  resultsCount.innerHTML = results.length
+    ? `<strong>${results.length}</strong> item${results.length === 1 ? "" : "s"} found · showing ${start + 1}–${start + visible.length}`
+    : `<strong>0</strong> items found`;
 
   if (sortSelect) sortSelect.value = shopFilters.sort;
+  syncFilterInputs();
 
-  const chips: string[] = [];
-  if (shopFilters.search) {
-    chips.push(
-      `<span class="chip">“${escapeHtml(shopFilters.search)}” <button data-clear="search">✕</button></span>`
-    );
-  }
-  chipsBox.innerHTML = chips.join("");
+  chipsBox.innerHTML = buildChips();
   chipsBox.querySelectorAll<HTMLButtonElement>("[data-clear]").forEach((btn) => {
-    btn.addEventListener("click", () => setFilters({ search: "" }));
+    btn.addEventListener("click", () => clearChip(btn.dataset.clear ?? ""));
   });
 
   if (!results.length) {
     grid.innerHTML = `
       <div class="empty-state" style="grid-column:1/-1;">
-        <h3>No products match your filters</h3>
-        <p>Try a different category or search term.</p>
+        <h3>Nothing matches these filters</h3>
+        <p>Widen the price range or pick another category.</p>
       </div>
     `;
   } else {
@@ -403,12 +507,76 @@ function renderToolbarAndGrid(): void {
     observeReveal(grid.querySelectorAll(".product-card"));
   }
 
-  if (loadMoreBtn) {
-    loadMoreBtn.style.display = shopVisibleCount < results.length ? "inline-flex" : "none";
-    loadMoreBtn.onclick = () => {
-      shopVisibleCount += SHOP_PAGE_SIZE;
-      renderToolbarAndGrid();
-    };
+  const pager = document.getElementById("shopPagination");
+  if (pager) {
+    renderPagination(pager, {
+      currentPage: page,
+      totalPages,
+      onChange: (next) => {
+        setFilters({ page: next });
+        document.querySelector(".shop-toolbar")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      },
+    });
+  }
+
+}
+
+function syncFilterInputs(): void {
+  const min = document.getElementById("minPriceInput") as HTMLInputElement | null;
+  const max = document.getElementById("maxPriceInput") as HTMLInputElement | null;
+  const stock = document.getElementById("inStockOnly") as HTMLInputElement | null;
+  if (min) min.value = shopFilters.minPrice === null ? "" : String(shopFilters.minPrice);
+  if (max) max.value = shopFilters.maxPrice === null ? "" : String(shopFilters.maxPrice);
+  if (stock) stock.checked = shopFilters.inStockOnly;
+}
+
+function buildChips(): string {
+  const chips: string[] = [];
+
+  if (shopFilters.search) {
+    chips.push(
+      `<span class="chip">“${escapeHtml(shopFilters.search)}” <button data-clear="search">✕</button></span>`
+    );
+  }
+  if (shopFilters.category) {
+    chips.push(
+      `<span class="chip">${escapeHtml(getCategoryLabel(shopFilters.category))} <button data-clear="category">✕</button></span>`
+    );
+  }
+  if (shopFilters.subCategory) {
+    chips.push(
+      `<span class="chip">${escapeHtml(shopFilters.subCategory)} <button data-clear="subCategory">✕</button></span>`
+    );
+  }
+  if (shopFilters.minPrice !== null || shopFilters.maxPrice !== null) {
+    const from = shopFilters.minPrice === null ? "0" : String(shopFilters.minPrice);
+    const to = shopFilters.maxPrice === null ? "any" : String(shopFilters.maxPrice);
+    chips.push(`<span class="chip">Rs. ${from} – ${to} <button data-clear="price">✕</button></span>`);
+  }
+  if (shopFilters.inStockOnly) {
+    chips.push(`<span class="chip">In stock only <button data-clear="stock">✕</button></span>`);
+  }
+
+  return chips.join("");
+}
+
+function clearChip(kind: string): void {
+  switch (kind) {
+    case "search":
+      setFilters({ search: "" });
+      break;
+    case "category":
+      setFilters({ category: null, subCategory: null });
+      break;
+    case "subCategory":
+      setFilters({ subCategory: null });
+      break;
+    case "price":
+      setFilters({ minPrice: null, maxPrice: null });
+      break;
+    case "stock":
+      setFilters({ inStockOnly: false });
+      break;
   }
 }
 
@@ -417,12 +585,42 @@ function bindShopChrome(): void {
     const val = (e.target as HTMLSelectElement).value as typeof shopFilters.sort;
     setFilters({ sort: val });
   });
+
+  document.getElementById("applyPriceBtn")?.addEventListener("click", applyPriceFilter);
+
+  document.getElementById("inStockOnly")?.addEventListener("change", (e) => {
+    setFilters({ inStockOnly: (e.target as HTMLInputElement).checked });
+  });
+
+  document.getElementById("clearFiltersBtn")?.addEventListener("click", () => resetFilters());
+
+  document.getElementById("filtersToggle")?.addEventListener("click", () => {
+    document.getElementById("shopFilters")?.classList.toggle("open");
+  });
+
+  ["minPriceInput", "maxPriceInput"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("keydown", (e) => {
+      if ((e as KeyboardEvent).key === "Enter") applyPriceFilter();
+    });
+  });
 }
 
-/** Re-render title/grid when filters change while the category results page is mounted. */
+function applyPriceFilter(): void {
+  const minEl = document.getElementById("minPriceInput") as HTMLInputElement | null;
+  const maxEl = document.getElementById("maxPriceInput") as HTMLInputElement | null;
+
+  const min = minEl && minEl.value.trim() !== "" ? Number(minEl.value) : null;
+  const max = maxEl && maxEl.value.trim() !== "" ? Number(maxEl.value) : null;
+
+  setFilters({
+    minPrice: min !== null && !Number.isNaN(min) ? min : null,
+    maxPrice: max !== null && !Number.isNaN(max) ? max : null,
+  });
+}
+
 export function refreshShopPageIfMounted(): void {
   if (!document.getElementById("shopGrid")) return;
-  shopVisibleCount = SHOP_PAGE_SIZE;
   updateShopHeroTitle();
+  renderFilterSidebar();
   renderToolbarAndGrid();
 }

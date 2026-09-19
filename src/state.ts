@@ -33,6 +33,10 @@ export const shopFilters: ShopFilters = {
   subCategory: null,
   search: "",
   sort: "featured",
+  minPrice: null,
+  maxPrice: null,
+  inStockOnly: false,
+  page: 1,
 };
 
 export function resetFilters() {
@@ -40,20 +44,29 @@ export function resetFilters() {
   shopFilters.subCategory = null;
   shopFilters.search = "";
   shopFilters.sort = "featured";
+  shopFilters.minPrice = null;
+  shopFilters.maxPrice = null;
+  shopFilters.inStockOnly = false;
+  shopFilters.page = 1;
   bus.emit("filters:change");
 }
 
 export function setFilters(partial: Partial<ShopFilters>) {
+  const onlyPageChanged = Object.keys(partial).length === 1 && "page" in partial;
   Object.assign(shopFilters, partial);
+  if (!onlyPageChanged) shopFilters.page = 1;
   bus.emit("filters:change");
 }
 
-/** Navigate to the Shop page, optionally pre-filtering by category / subcategory / search term. */
 export function goToShop(opts: Partial<ShopFilters> = {}) {
   shopFilters.category = opts.category ?? null;
   shopFilters.subCategory = opts.subCategory ?? null;
   shopFilters.search = opts.search ?? "";
   shopFilters.sort = opts.sort ?? "featured";
+  shopFilters.minPrice = opts.minPrice ?? null;
+  shopFilters.maxPrice = opts.maxPrice ?? null;
+  shopFilters.inStockOnly = opts.inStockOnly ?? false;
+  shopFilters.page = opts.page ?? 1;
   window.location.hash = "#shop";
   setView("shop");
   bus.emit("filters:change");
@@ -64,13 +77,23 @@ export function goHome() {
   setView("home");
 }
 
+export function navigate(view: ViewName) {
+  window.location.hash = `#${view}`;
+  setView(view);
+}
+
 /* -------------------------------- CART -------------------------------- */
 
-const CART_KEY = "papernest_cart";
+const CART_KEY_PREFIX = "papernest_cart_";
+let cartOwner = "guest";
+
+function cartKey(): string {
+  return CART_KEY_PREFIX + cartOwner;
+}
 
 function loadCart(): CartItem[] {
   try {
-    const raw = localStorage.getItem(CART_KEY);
+    const raw = localStorage.getItem(cartKey());
     if (!raw) return [];
     const parsed = JSON.parse(raw) as CartItem[];
     return Array.isArray(parsed) ? parsed : [];
@@ -83,10 +106,18 @@ export const cart: CartItem[] = loadCart();
 
 function persistCart() {
   try {
-    localStorage.setItem(CART_KEY, JSON.stringify(cart));
+    localStorage.setItem(cartKey(), JSON.stringify(cart));
   } catch {
-    /* storage unavailable — ignore */
+
   }
+  bus.emit("cart:change");
+}
+
+export function setCartOwner(uid: string | null): void {
+  cartOwner = uid ?? "guest";
+  const next = loadCart();
+  cart.length = 0;
+  cart.push(...next);
   bus.emit("cart:change");
 }
 

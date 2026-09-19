@@ -1,4 +1,4 @@
-import { productsData } from "./productsData";
+import { getAllProducts } from "./productsService";
 import type { Product } from "./types";
 import { goToShop } from "./state";
 import { debounce, formatPrice } from "./utils";
@@ -85,7 +85,7 @@ function renderSuggestions(term: string): void {
     return;
   }
 
-  const results = productsData.filter((p) => matchesTerm(p, term)).slice(0, 8);
+  const results = getAllProducts().filter((p) => matchesTerm(p, term)).slice(0, 8);
 
   if (!results.length) {
     box.innerHTML = `<div class="search-empty">No products found for “${escapeHtml(term)}”.</div>`;
@@ -108,7 +108,7 @@ function renderSuggestions(term: string): void {
   box.querySelectorAll<HTMLElement>(".search-suggestion").forEach((el) => {
     el.addEventListener("click", () => {
       const id = Number(el.dataset.id);
-      const product = productsData.find((p) => p.id === id);
+      const product = getAllProducts().find((p) => p.id === id);
       if (product) {
         closeSearch();
         openProductQuickView(product);
