@@ -28,6 +28,10 @@ service cloud.firestore {
         allow read, write: if isOwner(uid);
       }
     }
+    
+    match /carts/{uid} {
+      allow read, write: if isOwner(uid);
+    }
 
     match /products/{productId} {
       allow read: if true;

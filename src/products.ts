@@ -88,7 +88,6 @@ export function createProductCard(product: Product): string {
   `;
 }
 
-/** Attach click handlers for quick-view, wishlist & add-to-cart on `.product-card` elements. */
 export function bindProductCardEvents(cards: Element[] | NodeListOf<Element>): void {
   Array.from(cards).forEach((card) => {
     const id = Number((card as HTMLElement).dataset.id);
@@ -256,7 +255,7 @@ function setupHomeInfiniteScroll(): void {
   if (!sentinel) return;
 
   if (!("IntersectionObserver" in window)) {
-    // Fallback: load everything at once if the browser can't observe scroll.
+  
     while (homeVisibleCount < getAllProducts().length) {
       homeVisibleCount += HOME_PAGE_SIZE;
     }

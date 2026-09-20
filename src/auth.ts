@@ -67,7 +67,6 @@ async function loadOrCreateProfile(user: User): Promise<UserProfile> {
   return profile;
 }
 
-/** Update the signed-in shopper's own name. */
 export async function updateMyName(name: string): Promise<void> {
   if (!currentUser) return;
   await updateDoc(doc(db, "users", currentUser.uid), { name });
@@ -80,7 +79,6 @@ export async function updateMyName(name: string): Promise<void> {
    INIT
    ========================================================================== */
 
-/** Resolves once the first auth state callback has fired. */
 export function initAuth(): Promise<void> {
   return new Promise((resolve) => {
     if (!isFirebaseConfigured) {
@@ -90,7 +88,6 @@ export function initAuth(): Promise<void> {
       return;
     }
 
-    // If Firebase can't be reached the app should still paint.
     const failsafe = setTimeout(() => {
       authReady = true;
       resolve();
@@ -165,7 +162,6 @@ export async function logOut(): Promise<void> {
 
 type AuthMode = "login" | "signup";
 
-/** Where to go once the shopper is signed in. */
 let afterAuth: (() => void) | null = null;
 
 export function openAuthModal(mode: AuthMode = "login", onSuccess?: () => void): void {

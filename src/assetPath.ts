@@ -1,5 +1,5 @@
 export function assetUrl(path: string): string {
-  if (!path.startsWith("/")) return path; // already relative or a full URL
+  if (!path.startsWith("/")) return path; 
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   return base + path;
 }

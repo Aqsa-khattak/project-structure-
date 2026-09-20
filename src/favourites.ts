@@ -8,7 +8,7 @@ import type { Product } from "./types";
 const STORAGE_PREFIX = "papernest_favourites_";
 
 let owner = "guest";
-let syncUid: string | null = null; // the uid to sync toggles to, null while signed out
+let syncUid: string | null = null; 
 
 let ids = new Set<number>(loadLocal());
 
@@ -31,7 +31,7 @@ function persistLocal(): void {
   try {
     localStorage.setItem(storageKey(), JSON.stringify(Array.from(ids)));
   } catch {
-    /* storage unavailable — ignore */
+    
   }
 }
 

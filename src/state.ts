@@ -113,12 +113,18 @@ function persistCart() {
   bus.emit("cart:change");
 }
 
-export function setCartOwner(uid: string | null): void {
+export function switchCartOwner(uid: string | null): void {
   cartOwner = uid ?? "guest";
   const next = loadCart();
   cart.length = 0;
   cart.push(...next);
   bus.emit("cart:change");
+}
+
+export function replaceCart(items: CartItem[]): void {
+  cart.length = 0;
+  cart.push(...items);
+  persistCart();
 }
 
 export function addToCart(product: Product, quantity = 1) {

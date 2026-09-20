@@ -11,9 +11,10 @@ import {
 } from "./products";
 import { setupSearch } from "./search";
 import { setupCart } from "./cart";
-import { bus, currentView, goToShop, setCartOwner, setView } from "./state";
+import { bus, currentView, goToShop, setView } from "./state";
 import { getCurrentUser, initAuth } from "./auth";
 import { setFavouritesOwner } from "./favourites";
+import { setCartOwner } from "./cartSync";
 import { loadProducts } from "./productsService";
 import { renderAccountPage, renderWishlistPage } from "./dashboard";
 import { renderAdminPage } from "./admin";
@@ -106,9 +107,11 @@ function syncViewFromHash(): void {
 }
 
 async function init(): Promise<void> {
+
   await Promise.all([initAuth(), loadProducts()]);
-  syncOwnedDataToCurrentUser();
-  bus.on("auth:change", syncOwnedDataToCurrentUser);
+
+  await syncOwnedDataToCurrentUser();
+  bus.on("auth:change", () => void syncOwnedDataToCurrentUser());
 
   renderNavbar();
   renderFooter();
@@ -121,7 +124,7 @@ async function init(): Promise<void> {
   bus.on("filters:change", () => {
     if (currentView === "shop") refreshShopPageIfMounted();
   });
-
+  
   bus.on("auth:change", () => {
     if (currentView === "account" || currentView === "admin") renderApp();
   });
@@ -134,9 +137,9 @@ async function init(): Promise<void> {
   renderApp();
 }
 
-function syncOwnedDataToCurrentUser(): void {
+async function syncOwnedDataToCurrentUser(): Promise<void> {
   const uid = getCurrentUser()?.uid ?? null;
-  setCartOwner(uid);
+  await setCartOwner(uid);
   setFavouritesOwner(uid);
 }
 
