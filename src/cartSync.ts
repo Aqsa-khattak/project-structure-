@@ -1,7 +1,7 @@
 import { doc, getDoc, setDoc } from "firebase/firestore";
 
 import { db, isFirebaseConfigured } from "./firebase";
-import { bus, cart, replaceCart, switchCartOwner } from "./state";
+import { bus, cart, clearGuestCartStorage, replaceCart, switchCartOwner } from "./state";
 import { getProductById } from "./productsService";
 import type { Product } from "./types";
 
@@ -39,8 +39,8 @@ export async function setCartOwner(uid: string | null): Promise<void> {
 
   try {
     const snap = await getDoc(doc(db, COLLECTION, uid));
-    if (myRequest !== requestId) return;
-
+    if (myRequest !== requestId) return; 
+    
     const remoteLines: RemoteCartLine[] = snap.exists() ? (snap.data().items ?? []) : [];
 
     const merged = new Map<number, number>();
@@ -49,7 +49,6 @@ export async function setCartOwner(uid: string | null): Promise<void> {
     };
     addLines(remoteLines);
     addLines(guestLines);
-    cart.forEach((item) => addLines([{ productId: item.product.id, quantity: item.quantity }]));
 
     const resolved: { product: Product; quantity: number }[] = [];
     merged.forEach((quantity, productId) => {
@@ -59,6 +58,8 @@ export async function setCartOwner(uid: string | null): Promise<void> {
 
     syncUid = uid;
     replaceCart(resolved);
+
+    if (guestLines.length > 0) clearGuestCartStorage();
   } catch (err) {
     console.error("Could not load your cart:", err);
     if (myRequest === requestId) syncUid = uid; 

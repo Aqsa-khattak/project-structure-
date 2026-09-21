@@ -127,6 +127,14 @@ export function replaceCart(items: CartItem[]): void {
   persistCart();
 }
 
+export function clearGuestCartStorage(): void {
+  try {
+    localStorage.removeItem(CART_KEY_PREFIX + "guest");
+  } catch {
+    
+  }
+}
+
 export function addToCart(product: Product, quantity = 1) {
   const existing = cart.find((item) => item.product.id === product.id);
   if (existing) {
