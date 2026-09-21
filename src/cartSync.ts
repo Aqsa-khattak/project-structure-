@@ -14,11 +14,19 @@ interface RemoteCartLine {
 
 let syncUid: string | null = null;
 
-let requestId = 0;
+let chain: Promise<void> = Promise.resolve();
 
-export async function setCartOwner(uid: string | null): Promise<void> {
-  const myRequest = ++requestId;
+export function setCartOwner(uid: string | null): Promise<void> {
+  const run = chain.then(() => setCartOwnerInternal(uid));
 
+  chain = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
+
+async function setCartOwnerInternal(uid: string | null): Promise<void> {
   if (!uid) {
     syncUid = null;
     switchCartOwner(null);
@@ -33,14 +41,13 @@ export async function setCartOwner(uid: string | null): Promise<void> {
   switchCartOwner(uid);
 
   if (!isFirebaseConfigured) {
-    if (myRequest === requestId) syncUid = uid;
+    syncUid = uid;
     return;
   }
 
   try {
     const snap = await getDoc(doc(db, COLLECTION, uid));
-    if (myRequest !== requestId) return; 
-    
+
     const remoteLines: RemoteCartLine[] = snap.exists() ? (snap.data().items ?? []) : [];
 
     const merged = new Map<number, number>();
@@ -58,11 +65,11 @@ export async function setCartOwner(uid: string | null): Promise<void> {
 
     syncUid = uid;
     replaceCart(resolved);
-
+  
     if (guestLines.length > 0) clearGuestCartStorage();
   } catch (err) {
     console.error("Could not load your cart:", err);
-    if (myRequest === requestId) syncUid = uid; 
+    syncUid = uid; 
   }
 }
 
