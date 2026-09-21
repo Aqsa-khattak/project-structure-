@@ -15,6 +15,7 @@ import { renderPagination } from "./pagination";
 import { navigate } from "./state";
 import { showToast } from "./cart";
 import { isFirebaseConfigured } from "./firebase";
+import { rawAssetPath } from "./assetPath";
 import type { Order, OrderStatus, Product, UserProfile } from "./types";
 
 type Tab = "overview" | "products" | "orders" | "users";
@@ -345,7 +346,7 @@ function openProductForm(product: Product | null): void {
 
           <div class="auth-field">
             <label for="pfImage">Image path</label>
-            <input type="text" id="pfImage" value="${escapeHtml(p?.image ?? "")}" placeholder="/assets/totebag/totebag1.jpg" />
+            <input type="text" id="pfImage" value="${escapeHtml(p?.image ? rawAssetPath(p.image) : "")}" placeholder="/assets/totebag/totebag1.jpg" />
           </div>
 
           <div class="auth-field">
@@ -423,7 +424,7 @@ function openProductForm(product: Product | null): void {
       id: p?.id ?? nextProductId(),
       title,
       price,
-      image: image || "/assets/placeholder.jpg",
+      image: rawAssetPath(image || "/assets/placeholder.jpg"),
       category: cats,
       subCategory: sub ? sub.split(",").map((s) => s.trim()).filter(Boolean) : [],
       inStock,
